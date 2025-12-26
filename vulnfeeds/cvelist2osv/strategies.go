@@ -22,6 +22,8 @@ func cpeVersionExtraction(cve cves.CVE5, metrics *ConversionMetrics) ([]*osvsche
 
 // textVersionExtraction is a helper function for CPE and description extraction.
 func textVersionExtraction(cve cves.CVE5, metrics *ConversionMetrics) []*osvschema.Range {
+	var res []*osvschema.Range
+
 	// As a last resort, try extracting versions from the description text.
 	versions, extractNotes := cves.ExtractVersionsFromText(nil, cves.EnglishDescription(cve.Containers.CNA.Descriptions))
 	for _, note := range extractNotes {
@@ -31,9 +33,19 @@ func textVersionExtraction(cve cves.CVE5, metrics *ConversionMetrics) []*osvsche
 		// NOTE: These versions are not currently saved due to the need for better validation.
 		metrics.VersionSources = append(metrics.VersionSources, VersionSourceDescription)
 		metrics.AddNote("Extracted versions from description but did not save them: %+v", versions)
+
+		r := &osvschema.Range{
+			Events: make([]*osvschema.Event, len(versions)),
+		}
+		for i := range versions {
+			r.Events[i].Introduced = versions[i].Introduced
+			r.Events[i].Fixed = versions[i].Fixed
+			r.Events[i].LastAffected = versions[i].LastAffected
+		}
+		res = append(res, r)
 	}
 
-	return []*osvschema.Range{}
+	return res
 }
 
 // initialNormalExtraction handles an expected case of version ranges in the affected field of CVE5
