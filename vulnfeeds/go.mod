@@ -1,4 +1,4 @@
-module github.com/google/osv/vulnfeeds
+module github.com/apecloud/osv/vulnfeeds
 
 go 1.25.5
 
