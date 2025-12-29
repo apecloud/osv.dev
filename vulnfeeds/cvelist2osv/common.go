@@ -254,7 +254,7 @@ func handleEmptyIntroduced(es []event) []event {
 				if v > 1 {
 					empty[i].introduced = semver.MajorMinor(versionSource)
 				} else {
-					empty[i].introduced = semver.MajorMinor(versionSource)
+					empty[i].introduced = semver.Major(versionSource)
 				}
 			}
 		}
