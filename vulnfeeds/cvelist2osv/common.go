@@ -267,12 +267,31 @@ func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 	var stillUnresolvedRanges []*osvschema.Range
 	for _, vr := range *unresolvedRanges {
 		es := make([]event, 0)
-		for _, e := range vr.GetEvents() {
-			if e.Fixed == "" && e.LastAffected == "" {
-				continue
+		if len(vr.GetEvents()) == 2 {
+			var introduced, fixed, lastAffected string
+			for _, e := range vr.GetEvents() {
+				if e.GetIntroduced() != "" {
+					introduced = e.GetIntroduced()
+				}
+				if e.GetFixed() != "" {
+					fixed = e.GetFixed()
+				}
+				if e.GetLastAffected() != "" {
+					lastAffected = e.GetLastAffected()
+				}
 			}
 
-			es = append(es, newEvent(e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
+			if fixed != "" || lastAffected != "" {
+				es = append(es, newEvent(introduced, fixed, lastAffected))
+			}
+		} else {
+			for _, e := range vr.GetEvents() {
+				if e.Fixed == "" && e.LastAffected == "" {
+					continue
+				}
+
+				es = append(es, newEvent(e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
+			}
 		}
 
 		if len(es) > 0 {
