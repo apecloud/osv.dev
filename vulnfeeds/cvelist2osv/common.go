@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/google/osv/vulnfeeds/utility/logger"
 	"github.com/google/osv/vulnfeeds/vulns"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
+	"golang.org/x/mod/semver"
 )
 
 // VersionRangeType represents the type of versioning scheme for a range.
@@ -170,32 +172,57 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 	}
 
 	if len(unresolvedRanges) > 0 {
+		type event struct {
+			introduced, fixed, lastAffected string
+		}
+
 		var stillUnresolvedRanges []*osvschema.Range
 		for _, vr := range unresolvedRanges {
-			var introduced, fixed, lastAffected string
+			es := make([]event, 0)
 			for _, e := range vr.GetEvents() {
-				if e.GetIntroduced() != "" {
-					introduced = e.GetIntroduced()
+				if e.Fixed == "" && e.LastAffected == "" {
+					continue
 				}
-				if e.GetFixed() != "" {
-					fixed = e.GetFixed()
-				}
-				if e.GetLastAffected() != "" {
-					lastAffected = e.GetLastAffected()
-				}
+
+				es = append(es, event{
+					introduced: func() string {
+						if e.GetIntroduced() != "" {
+							return e.GetIntroduced()
+						}
+						return "0"
+					}(),
+					fixed:        e.GetFixed(),
+					lastAffected: e.GetLastAffected(),
+				})
 			}
 
-			if introduced != "" && (fixed != "" || lastAffected != "") {
-				var newVR *osvschema.Range
+			if len(es) > 0 {
+				sort.Slice(es, func(i, j int) bool {
+					return semver.Compare(es[i].introduced, es[j].introduced) < 0
+				})
 
-				if fixed != "" {
-					newVR = cves.BuildVersionRange(introduced, "", fixed)
-				} else {
-					newVR = cves.BuildVersionRange(introduced, lastAffected, "")
+				newVR := osvschema.Range{
+					Events: make([]*osvschema.Event, 0),
+					Type:   osvschema.Range_SEMVER,
 				}
+				for _, e := range es {
+					if l := len(newVR.Events); l > 0 {
+						if newVR.Events[l-1].Fixed == e.introduced && semver.Compare(newVR.Events[l-1].Fixed, e.fixed) < 0 {
+							newVR.Events[l-1].Fixed = e.fixed
+						}
+						continue
+					}
 
-				newVR.Type = osvschema.Range_SEMVER
-				newVersionRanges = append(newVersionRanges, newVR)
+					ev := osvschema.Event{
+						Introduced: e.introduced,
+					}
+					if e.fixed != "" {
+						ev.Fixed = e.fixed
+					} else {
+						ev.LastAffected = e.lastAffected
+					}
+					newVR.Events = append(newVR.Events, &ev)
+				}
 			} else {
 				stillUnresolvedRanges = append(stillUnresolvedRanges, vr)
 			}
