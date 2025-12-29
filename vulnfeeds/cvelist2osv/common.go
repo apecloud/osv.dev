@@ -169,6 +169,37 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 		unresolvedRanges = stillUnresolvedRanges
 	}
 
+	if len(unresolvedRanges) > 0 {
+		var stillUnresolvedRanges []*osvschema.Range
+		for _, vr := range unresolvedRanges {
+			var introduced, fixed, lastAffected string
+			for _, e := range vr.GetEvents() {
+				if e.GetIntroduced() != "" {
+					introduced = e.GetIntroduced()
+				}
+				if e.GetFixed() != "" {
+					fixed = e.GetFixed()
+				}
+				if e.GetLastAffected() != "" {
+					lastAffected = e.GetLastAffected()
+				}
+			}
+
+			if introduced != "" && (fixed != "" || lastAffected != "") {
+				var newVR *osvschema.Range
+
+				if fixed != "" {
+					newVR = cves.BuildVersionRange(introduced, "", fixed)
+				} else {
+					newVR = cves.BuildVersionRange(introduced, lastAffected, "")
+				}
+				newVersionRanges = append(newVersionRanges, newVR)
+			} else {
+				stillUnresolvedRanges = append(stillUnresolvedRanges, vr)
+			}
+		}
+	}
+
 	var err error
 	if len(unresolvedRanges) > 0 {
 		databaseSpecific, err := utility.NewStructpbFromMap(map[string]any{"unresolved_ranges": unresolvedRanges})
