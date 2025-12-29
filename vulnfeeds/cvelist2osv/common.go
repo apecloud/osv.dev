@@ -176,10 +176,10 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 			introduced, fixed, lastAffected string
 		}
 
-		handleEmptyIntroduced := func(es *[]event) {
+		handleEmptyIntroduced := func(es []event) []event {
 			empty := make([]event, 0)
 			nonEmpty := make([]event, 0)
-			for _, e := range *es {
+			for _, e := range es {
 				if e.introduced == "" {
 					empty = append(empty, e)
 				} else {
@@ -218,6 +218,7 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 				}
 			}
 
+			return append(empty, nonEmpty...)
 		}
 
 		var stillUnresolvedRanges []*osvschema.Range
@@ -236,7 +237,7 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 			}
 
 			if len(es) > 0 {
-				handleEmptyIntroduced(&es)
+				es = handleEmptyIntroduced(es)
 				sort.Slice(es, func(i, j int) bool {
 					if c := semver.Compare(es[i].introduced, es[j].introduced); c != 0 {
 						return c < 0
