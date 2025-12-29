@@ -341,6 +341,7 @@ func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 			}
 		}
 		*newVersionRanges = append(*newVersionRanges, &newVR)
+		*unresolvedRanges = nil
 	}
 }
 
