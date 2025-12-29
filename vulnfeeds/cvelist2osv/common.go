@@ -264,9 +264,8 @@ func handleEmptyIntroduced(es []event) []event {
 }
 
 func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
-	var stillUnresolvedRanges []*osvschema.Range
+	es := make([]event, 0)
 	for _, vr := range *unresolvedRanges {
-		es := make([]event, 0)
 		if len(vr.GetEvents()) == 2 {
 			var introduced, fixed, lastAffected string
 			for _, e := range vr.GetEvents() {
@@ -293,59 +292,56 @@ func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 				es = append(es, newEvent(e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
 			}
 		}
-
-		if len(es) > 0 {
-			es = handleEmptyIntroduced(es)
-			sort.Slice(es, func(i, j int) bool {
-				if c := semver.Compare(es[i].introduced, es[j].introduced); c != 0 {
-					return c < 0
-				}
-				if c := semver.Compare(es[i].fixed, es[j].fixed); c != 0 {
-					return c < 0
-				}
-				return semver.Compare(es[i].lastAffected, es[j].lastAffected) < 0
-			})
-
-			newVR := osvschema.Range{
-				Events: make([]*osvschema.Event, 0),
-				Type:   osvschema.Range_SEMVER,
-			}
-			for _, e := range es {
-				if l := len(newVR.Events); l > 0 {
-					if newVR.Events[l-1].Fixed == e.introduced && semver.Compare(newVR.Events[l-1].Fixed, e.fixed) < 0 {
-						newVR.Events[l-1].Fixed = e.fixed
-						continue
-					}
-				}
-
-				if e.fixed != "" {
-					v := semver.Canonical(e.fixed)
-					if v != "" {
-						newVR.Events = append(newVR.Events, &osvschema.Event{
-							Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
-						})
-						newVR.Events = append(newVR.Events, &osvschema.Event{
-							Fixed: strings.TrimPrefix(v, "v"),
-						})
-					}
-				} else {
-					v := semver.Canonical(e.lastAffected)
-					if v != "" {
-						newVR.Events = append(newVR.Events, &osvschema.Event{
-							Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
-						})
-						newVR.Events = append(newVR.Events, &osvschema.Event{
-							LastAffected: strings.TrimPrefix(v, "v"),
-						})
-					}
-				}
-			}
-			*newVersionRanges = append(*newVersionRanges, &newVR)
-		} else {
-			stillUnresolvedRanges = append(stillUnresolvedRanges, vr)
-		}
 	}
-	*unresolvedRanges = stillUnresolvedRanges
+
+	if len(es) > 0 {
+		es = handleEmptyIntroduced(es)
+		sort.Slice(es, func(i, j int) bool {
+			if c := semver.Compare(es[i].introduced, es[j].introduced); c != 0 {
+				return c < 0
+			}
+			if c := semver.Compare(es[i].fixed, es[j].fixed); c != 0 {
+				return c < 0
+			}
+			return semver.Compare(es[i].lastAffected, es[j].lastAffected) < 0
+		})
+
+		newVR := osvschema.Range{
+			Events: make([]*osvschema.Event, 0),
+			Type:   osvschema.Range_SEMVER,
+		}
+		for _, e := range es {
+			if l := len(newVR.Events); l > 0 {
+				if newVR.Events[l-1].Fixed == e.introduced && semver.Compare(newVR.Events[l-1].Fixed, e.fixed) < 0 {
+					newVR.Events[l-1].Fixed = e.fixed
+					continue
+				}
+			}
+
+			if e.fixed != "" {
+				v := semver.Canonical(e.fixed)
+				if v != "" {
+					newVR.Events = append(newVR.Events, &osvschema.Event{
+						Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
+					})
+					newVR.Events = append(newVR.Events, &osvschema.Event{
+						Fixed: strings.TrimPrefix(v, "v"),
+					})
+				}
+			} else {
+				v := semver.Canonical(e.lastAffected)
+				if v != "" {
+					newVR.Events = append(newVR.Events, &osvschema.Event{
+						Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
+					})
+					newVR.Events = append(newVR.Events, &osvschema.Event{
+						LastAffected: strings.TrimPrefix(v, "v"),
+					})
+				}
+			}
+		}
+		*newVersionRanges = append(*newVersionRanges, &newVR)
+	}
 }
 
 // findCPEVersionRanges extracts version ranges and CPE strings from the CNA's
