@@ -172,108 +172,7 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 	}
 
 	if len(unresolvedRanges) > 0 {
-		type event struct {
-			introduced, fixed, lastAffected string
-		}
-
-		handleEmptyIntroduced := func(es []event) []event {
-			empty := make([]event, 0)
-			nonEmpty := make([]event, 0)
-			for _, e := range es {
-				if e.introduced == "" {
-					empty = append(empty, e)
-				} else {
-					nonEmpty = append(nonEmpty, e)
-				}
-			}
-
-			if len(empty) == 1 {
-				empty[0].introduced = "0"
-			} else {
-				major := map[string]int{}
-				majorMinor := map[string]int{}
-				for _, e := range empty {
-					versionSource := e.fixed
-					if versionSource == "" {
-						versionSource = e.lastAffected
-					}
-
-					major[semver.Major(versionSource)]++
-					majorMinor[semver.MajorMinor(versionSource)]++
-				}
-
-				for _, e := range empty {
-					versionSource := e.fixed
-					if versionSource == "" {
-						versionSource = e.lastAffected
-					}
-
-					if v, ok := major[semver.Major(versionSource)]; ok {
-						if v > 1 {
-							e.introduced = semver.MajorMinor(versionSource)
-						} else {
-							e.introduced = semver.MajorMinor(versionSource)
-						}
-					}
-				}
-			}
-
-			return append(empty, nonEmpty...)
-		}
-
-		var stillUnresolvedRanges []*osvschema.Range
-		for _, vr := range unresolvedRanges {
-			es := make([]event, 0)
-			for _, e := range vr.GetEvents() {
-				if e.Fixed == "" && e.LastAffected == "" {
-					continue
-				}
-
-				es = append(es, event{
-					introduced:   e.GetIntroduced(),
-					fixed:        e.GetFixed(),
-					lastAffected: e.GetLastAffected(),
-				})
-			}
-
-			if len(es) > 0 {
-				es = handleEmptyIntroduced(es)
-				sort.Slice(es, func(i, j int) bool {
-					if c := semver.Compare(es[i].introduced, es[j].introduced); c != 0 {
-						return c < 0
-					}
-					if c := semver.Compare(es[i].fixed, es[j].fixed); c != 0 {
-						return c < 0
-					}
-					return semver.Compare(es[i].lastAffected, es[j].lastAffected) < 0
-				})
-
-				newVR := osvschema.Range{
-					Events: make([]*osvschema.Event, 0),
-					Type:   osvschema.Range_SEMVER,
-				}
-				for _, e := range es {
-					if l := len(newVR.Events); l > 0 {
-						if newVR.Events[l-1].Fixed == e.introduced && semver.Compare(newVR.Events[l-1].Fixed, e.fixed) < 0 {
-							newVR.Events[l-1].Fixed = e.fixed
-							continue
-						}
-					}
-
-					ev := osvschema.Event{
-						Introduced: semver.Canonical(e.introduced),
-					}
-					if e.fixed != "" {
-						ev.Fixed = semver.Canonical(e.fixed)
-					} else {
-						ev.LastAffected = semver.Canonical(e.lastAffected)
-					}
-					newVR.Events = append(newVR.Events, &ev)
-				}
-			} else {
-				stillUnresolvedRanges = append(stillUnresolvedRanges, vr)
-			}
-		}
+		getSemverVersion(&unresolvedRanges, &newVersionRanges)
 	}
 
 	var err error
@@ -296,6 +195,126 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 	}
 
 	return &newAff, err
+}
+
+type event struct {
+	introduced, fixed, lastAffected string
+}
+
+func newEvent(introduced, fixed, lastAffected string) event {
+	if introduced != "" {
+		introduced = "v" + introduced
+	}
+	if fixed != "" {
+		fixed = "v" + fixed
+	}
+	if lastAffected != "" {
+		lastAffected = "v" + lastAffected
+	}
+	return event{
+		introduced:   introduced,
+		fixed:        fixed,
+		lastAffected: lastAffected,
+	}
+}
+
+func handleEmptyIntroduced(es []event) []event {
+	empty := make([]event, 0)
+	nonEmpty := make([]event, 0)
+	for _, e := range es {
+		if e.introduced == "" {
+			empty = append(empty, e)
+		} else {
+			nonEmpty = append(nonEmpty, e)
+		}
+	}
+
+	if len(empty) == 1 {
+		empty[0].introduced = "v0"
+	} else {
+		major := map[string]int{}
+		majorMinor := map[string]int{}
+		for _, e := range empty {
+			versionSource := e.fixed
+			if versionSource == "" {
+				versionSource = e.lastAffected
+			}
+
+			major[semver.Major(versionSource)]++
+			majorMinor[semver.MajorMinor(versionSource)]++
+		}
+
+		for _, e := range empty {
+			versionSource := e.fixed
+			if versionSource == "" {
+				versionSource = e.lastAffected
+			}
+
+			if v, ok := major[semver.Major(versionSource)]; ok {
+				if v > 1 {
+					e.introduced = semver.MajorMinor(versionSource)
+				} else {
+					e.introduced = semver.MajorMinor(versionSource)
+				}
+			}
+		}
+	}
+
+	return append(empty, nonEmpty...)
+}
+
+func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
+	var stillUnresolvedRanges []*osvschema.Range
+	for _, vr := range *unresolvedRanges {
+		es := make([]event, 0)
+		for _, e := range vr.GetEvents() {
+			if e.Fixed == "" && e.LastAffected == "" {
+				continue
+			}
+
+			es = append(es, newEvent(e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
+		}
+
+		if len(es) > 0 {
+			es = handleEmptyIntroduced(es)
+			sort.Slice(es, func(i, j int) bool {
+				if c := semver.Compare(es[i].introduced, es[j].introduced); c != 0 {
+					return c < 0
+				}
+				if c := semver.Compare(es[i].fixed, es[j].fixed); c != 0 {
+					return c < 0
+				}
+				return semver.Compare(es[i].lastAffected, es[j].lastAffected) < 0
+			})
+
+			newVR := osvschema.Range{
+				Events: make([]*osvschema.Event, 0),
+				Type:   osvschema.Range_SEMVER,
+			}
+			for _, e := range es {
+				if l := len(newVR.Events); l > 0 {
+					if newVR.Events[l-1].Fixed == e.introduced && semver.Compare(newVR.Events[l-1].Fixed, e.fixed) < 0 {
+						newVR.Events[l-1].Fixed = e.fixed
+						continue
+					}
+				}
+
+				ev := osvschema.Event{
+					Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
+				}
+				if e.fixed != "" {
+					ev.Fixed = strings.TrimPrefix(semver.Canonical(e.fixed), "v")
+				} else {
+					ev.LastAffected = strings.TrimPrefix(semver.Canonical(e.lastAffected), "v")
+				}
+				newVR.Events = append(newVR.Events, &ev)
+			}
+			*newVersionRanges = append(*newVersionRanges, &newVR)
+		} else {
+			stillUnresolvedRanges = append(stillUnresolvedRanges, vr)
+		}
+	}
+	*unresolvedRanges = stillUnresolvedRanges
 }
 
 // findCPEVersionRanges extracts version ranges and CPE strings from the CNA's
