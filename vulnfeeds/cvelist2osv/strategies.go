@@ -38,9 +38,11 @@ func textVersionExtraction(cve cves.CVE5, metrics *ConversionMetrics) []*osvsche
 			Events: make([]*osvschema.Event, len(versions)),
 		}
 		for i := range versions {
-			r.Events[i].Introduced = versions[i].Introduced
-			r.Events[i].Fixed = versions[i].Fixed
-			r.Events[i].LastAffected = versions[i].LastAffected
+			r.Events[i] = &osvschema.Event{
+				Introduced:   versions[i].Introduced,
+				Fixed:        versions[i].Fixed,
+				LastAffected: versions[i].LastAffected,
+			}
 		}
 		res = append(res, r)
 	}
