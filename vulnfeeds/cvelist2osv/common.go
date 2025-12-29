@@ -193,6 +193,8 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 				} else {
 					newVR = cves.BuildVersionRange(introduced, lastAffected, "")
 				}
+
+				newVR.Type = osvschema.Range_SEMVER
 				newVersionRanges = append(newVersionRanges, newVR)
 			} else {
 				stillUnresolvedRanges = append(stillUnresolvedRanges, vr)
