@@ -244,7 +244,7 @@ func handleEmptyIntroduced(es []event) []event {
 			majorMinor[semver.MajorMinor(versionSource)]++
 		}
 
-		for _, e := range empty {
+		for i, e := range empty {
 			versionSource := e.fixed
 			if versionSource == "" {
 				versionSource = e.lastAffected
@@ -252,9 +252,9 @@ func handleEmptyIntroduced(es []event) []event {
 
 			if v, ok := major[semver.Major(versionSource)]; ok {
 				if v > 1 {
-					e.introduced = semver.MajorMinor(versionSource)
+					empty[i].introduced = semver.MajorMinor(versionSource)
 				} else {
-					e.introduced = semver.MajorMinor(versionSource)
+					empty[i].introduced = semver.MajorMinor(versionSource)
 				}
 			}
 		}
@@ -299,15 +299,27 @@ func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 					}
 				}
 
-				ev := osvschema.Event{
-					Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
-				}
 				if e.fixed != "" {
-					ev.Fixed = strings.TrimPrefix(semver.Canonical(e.fixed), "v")
+					v := semver.Canonical(e.fixed)
+					if v != "" {
+						newVR.Events = append(newVR.Events, &osvschema.Event{
+							Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
+						})
+						newVR.Events = append(newVR.Events, &osvschema.Event{
+							Fixed: strings.TrimPrefix(v, "v"),
+						})
+					}
 				} else {
-					ev.LastAffected = strings.TrimPrefix(semver.Canonical(e.lastAffected), "v")
+					v := semver.Canonical(e.lastAffected)
+					if v != "" {
+						newVR.Events = append(newVR.Events, &osvschema.Event{
+							Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
+						})
+						newVR.Events = append(newVR.Events, &osvschema.Event{
+							LastAffected: strings.TrimPrefix(v, "v"),
+						})
+					}
 				}
-				newVR.Events = append(newVR.Events, &ev)
 			}
 			*newVersionRanges = append(*newVersionRanges, &newVR)
 		} else {
