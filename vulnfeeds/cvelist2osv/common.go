@@ -176,6 +176,50 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 			introduced, fixed, lastAffected string
 		}
 
+		handleEmptyIntroduced := func(es *[]event) {
+			empty := make([]event, 0)
+			nonEmpty := make([]event, 0)
+			for _, e := range *es {
+				if e.introduced == "" {
+					empty = append(empty, e)
+				} else {
+					nonEmpty = append(nonEmpty, e)
+				}
+			}
+
+			if len(empty) == 1 {
+				empty[0].introduced = "0"
+			} else {
+				major := map[string]int{}
+				majorMinor := map[string]int{}
+				for _, e := range empty {
+					versionSource := e.fixed
+					if versionSource == "" {
+						versionSource = e.lastAffected
+					}
+
+					major[semver.Major(versionSource)]++
+					majorMinor[semver.MajorMinor(versionSource)]++
+				}
+
+				for _, e := range empty {
+					versionSource := e.fixed
+					if versionSource == "" {
+						versionSource = e.lastAffected
+					}
+
+					if v, ok := major[semver.Major(versionSource)]; ok {
+						if v > 1 {
+							e.introduced = semver.MajorMinor(versionSource)
+						} else {
+							e.introduced = semver.MajorMinor(versionSource)
+						}
+					}
+				}
+			}
+
+		}
+
 		var stillUnresolvedRanges []*osvschema.Range
 		for _, vr := range unresolvedRanges {
 			es := make([]event, 0)
@@ -185,20 +229,22 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 				}
 
 				es = append(es, event{
-					introduced: func() string {
-						if e.GetIntroduced() != "" {
-							return e.GetIntroduced()
-						}
-						return "0"
-					}(),
+					introduced:   e.GetIntroduced(),
 					fixed:        e.GetFixed(),
 					lastAffected: e.GetLastAffected(),
 				})
 			}
 
 			if len(es) > 0 {
+				handleEmptyIntroduced(&es)
 				sort.Slice(es, func(i, j int) bool {
-					return semver.Compare(es[i].introduced, es[j].introduced) < 0
+					if c := semver.Compare(es[i].introduced, es[j].introduced); c != 0 {
+						return c < 0
+					}
+					if c := semver.Compare(es[i].fixed, es[j].fixed); c != 0 {
+						return c < 0
+					}
+					return semver.Compare(es[i].lastAffected, es[j].lastAffected) < 0
 				})
 
 				newVR := osvschema.Range{
@@ -209,17 +255,17 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 					if l := len(newVR.Events); l > 0 {
 						if newVR.Events[l-1].Fixed == e.introduced && semver.Compare(newVR.Events[l-1].Fixed, e.fixed) < 0 {
 							newVR.Events[l-1].Fixed = e.fixed
+							continue
 						}
-						continue
 					}
 
 					ev := osvschema.Event{
-						Introduced: e.introduced,
+						Introduced: semver.Canonical(e.introduced),
 					}
 					if e.fixed != "" {
-						ev.Fixed = e.fixed
+						ev.Fixed = semver.Canonical(e.fixed)
 					} else {
-						ev.LastAffected = e.lastAffected
+						ev.LastAffected = semver.Canonical(e.lastAffected)
 					}
 					newVR.Events = append(newVR.Events, &ev)
 				}
