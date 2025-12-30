@@ -364,8 +364,10 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 				}
 			}
 		}
-		*newVersionRanges = append(*newVersionRanges, &newVR)
-		*unresolvedRanges = nil
+		if len(newVR.Events) > 0 {
+			*newVersionRanges = append(*newVersionRanges, &newVR)
+			*unresolvedRanges = nil
+		}
 	}
 }
 
