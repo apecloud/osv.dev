@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/osv/vulnfeeds/cves"
 	"github.com/google/osv/vulnfeeds/git"
@@ -172,7 +173,7 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 	}
 
 	if len(unresolvedRanges) > 0 {
-		getSemverVersion(&unresolvedRanges, &newVersionRanges)
+		getSemverVersion(cveID, &unresolvedRanges, &newVersionRanges)
 	}
 
 	var err error
@@ -201,7 +202,12 @@ type event struct {
 	introduced, fixed, lastAffected string
 }
 
-func newEvent(introduced, fixed, lastAffected string) event {
+func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected string) event {
+	cve := strings.Split(string(cveID), "-")
+	var cveYear string
+	if len(cve) == 3 {
+		cveYear = cve[1]
+	}
 	if introduced != "" {
 		introduced = "v" + introduced
 	}
@@ -209,7 +215,23 @@ func newEvent(introduced, fixed, lastAffected string) event {
 		fixed = "v" + fixed
 	}
 	if lastAffected != "" {
-		lastAffected = "v" + lastAffected
+		// use fixed instead of last_affected where possible
+		if cveYear == year {
+			lastAffected = "v" + lastAffected
+		} else {
+			version := semver.Canonical("v" + lastAffected)
+			if version != "" {
+				versions := strings.Split(version, ".")
+				if len(versions) == 3 {
+					v, err := strconv.Atoi(versions[2])
+					if err == nil {
+						versions[2] = strconv.Itoa(v + 1)
+						fixed = strings.Join(versions, ".")
+						lastAffected = ""
+					}
+				}
+			}
+		}
 	}
 	return event{
 		introduced:   introduced,
@@ -263,8 +285,9 @@ func handleEmptyIntroduced(es []event) []event {
 	return append(empty, nonEmpty...)
 }
 
-func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
+func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 	es := make([]event, 0)
+	nowYear := time.Now().Year()
 	for _, vr := range *unresolvedRanges {
 		if len(vr.GetEvents()) == 2 {
 			var introduced, fixed, lastAffected string
@@ -281,7 +304,7 @@ func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 			}
 
 			if fixed != "" || lastAffected != "" {
-				es = append(es, newEvent(introduced, fixed, lastAffected))
+				es = append(es, newEvent(cveID, strconv.Itoa(nowYear), introduced, fixed, lastAffected))
 			}
 		} else {
 			for _, e := range vr.GetEvents() {
@@ -289,7 +312,7 @@ func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 					continue
 				}
 
-				es = append(es, newEvent(e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
+				es = append(es, newEvent(cveID, strconv.Itoa(nowYear), e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
 			}
 		}
 	}
@@ -312,8 +335,9 @@ func getSemverVersion(unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 		}
 		for _, e := range es {
 			if l := len(newVR.Events); l > 0 {
-				if newVR.Events[l-1].Fixed == e.introduced && semver.Compare(newVR.Events[l-1].Fixed, e.fixed) < 0 {
-					newVR.Events[l-1].Fixed = e.fixed
+				introduced := strings.TrimPrefix(semver.Canonical(e.introduced), "v")
+				if newVR.Events[l-1].Fixed == introduced && semver.Canonical(e.fixed) != "" {
+					newVR.Events[l-1].Fixed = strings.TrimPrefix(semver.Canonical(e.fixed), "v")
 					continue
 				}
 			}
