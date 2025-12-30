@@ -208,7 +208,7 @@ func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected str
 	if len(cve) == 3 {
 		cveYear = cve[1]
 	}
-	if introduced != "" {
+	if introduced != "" && introduced != "0" {
 		introduced = "v" + introduced
 	}
 	if fixed != "" {
@@ -287,7 +287,7 @@ func handleEmptyIntroduced(es []event) []event {
 
 func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 	es := make([]event, 0)
-	nowYear := time.Now().Year()
+	nowYear := strconv.Itoa(time.Now().Year())
 	for _, vr := range *unresolvedRanges {
 		if len(vr.GetEvents()) == 2 {
 			var introduced, fixed, lastAffected string
@@ -304,7 +304,7 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 			}
 
 			if fixed != "" || lastAffected != "" {
-				es = append(es, newEvent(cveID, strconv.Itoa(nowYear), introduced, fixed, lastAffected))
+				es = append(es, newEvent(cveID, nowYear, introduced, fixed, lastAffected))
 			}
 		} else {
 			for _, e := range vr.GetEvents() {
@@ -312,7 +312,7 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 					continue
 				}
 
-				es = append(es, newEvent(cveID, strconv.Itoa(nowYear), e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
+				es = append(es, newEvent(cveID, nowYear, e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
 			}
 		}
 	}
