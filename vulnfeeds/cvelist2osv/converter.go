@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +20,7 @@ import (
 	"github.com/google/osv/vulnfeeds/vulns"
 	"github.com/ossf/osv-schema/bindings/go/osvconstants"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
+	"github.com/pandatix/nvdapi/v2"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -178,9 +180,69 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 		if sev := vulns.FindSeverity(severity); sev != nil {
 			v.Severity = []*osvschema.Severity{sev}
 		}
+	} else {
+		// get severity from nvd
+		if s := querySeverity(string(cve.Metadata.CVEID)); len(s) > 0 {
+			if sev := vulns.FindSeverity(s); sev != nil {
+				v.Severity = []*osvschema.Severity{sev}
+			}
+		}
 	}
 
 	return &v
+}
+
+func querySeverity(cveID string) []cves.Metrics {
+	resp, err := nvdapi.GetCVEs(&http.Client{}, nvdapi.GetCVEsParams{
+		CVEID: &cveID,
+	})
+	if err != nil {
+		return nil
+	}
+
+	res := make([]cves.Metrics, 0)
+	if len(resp.Vulnerabilities) > 0 {
+		cve := resp.Vulnerabilities[0].CVE
+		if cve.Metrics != nil {
+			for _, metric := range cve.Metrics.CVSSMetricV31 {
+				res = append(res, cves.Metrics{
+					CVSSv3_1: cves.BaseCVSS{
+						Version:      metric.CVSSData.Version,
+						VectorString: metric.CVSSData.VectorString,
+						BaseScore:    metric.CVSSData.BaseScore,
+						BaseSeverity: metric.CVSSData.BaseSeverity,
+					},
+				})
+			}
+
+			for _, metric := range cve.Metrics.CVSSMetricV30 {
+				res = append(res, cves.Metrics{
+					CVSSv3_0: cves.BaseCVSS{
+						Version:      metric.CVSSData.Version,
+						VectorString: metric.CVSSData.VectorString,
+						BaseScore:    metric.CVSSData.BaseScore,
+						BaseSeverity: metric.CVSSData.BaseSeverity,
+					},
+				})
+			}
+
+			for _, metric := range cve.Metrics.CVSSMetricV2 {
+				res = append(res, cves.Metrics{
+					CVSSv2_0: cves.BaseCVSS{
+						Version:      metric.CVSSData.Version,
+						VectorString: metric.CVSSData.VectorString,
+						BaseScore:    metric.CVSSData.BaseScore,
+						BaseSeverity: *metric.CVSSData.BaseSeverity,
+					},
+				})
+			}
+		}
+	}
+
+	if len(res) > 0 {
+		return res
+	}
+	return nil
 }
 
 // CreateOSVFile creates the initial file for the OSV record.
