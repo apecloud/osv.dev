@@ -20,8 +20,8 @@ var (
 	levelStyle   = lipgloss.NewStyle().Width(8).Bold(true)
 	messageStyle = lipgloss.NewStyle()
 	keyStyle     = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("6")). // Cyan
-			Bold(true)
+		Foreground(lipgloss.Color("6")). // Cyan
+		Bold(true)
 	valueStyle = lipgloss.NewStyle()
 )
 
@@ -35,8 +35,8 @@ func newLocalHandler(w io.Writer) *localHandler {
 	}
 }
 
-func (h *localHandler) Enabled(_ context.Context, _ slog.Level) bool {
-	return true
+func (h *localHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= slog.LevelInfo
 }
 
 func (h *localHandler) Handle(_ context.Context, r slog.Record) error {
