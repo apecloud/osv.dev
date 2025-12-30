@@ -20,8 +20,8 @@ var (
 	levelStyle   = lipgloss.NewStyle().Width(8).Bold(true)
 	messageStyle = lipgloss.NewStyle()
 	keyStyle     = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("6")). // Cyan
-		Bold(true)
+			Foreground(lipgloss.Color("6")). // Cyan
+			Bold(true)
 	valueStyle = lipgloss.NewStyle()
 )
 
