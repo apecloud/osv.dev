@@ -8,7 +8,6 @@ require (
 	github.com/aquasecurity/go-pep440-version v0.0.1
 	github.com/atombender/go-jsonschema v0.20.0
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/daehee/nvd v1.0.4
 	github.com/gkampitakis/go-snaps v0.5.18
 	github.com/go-git/go-git/v5 v5.16.4
 	github.com/google/go-cmp v0.7.0
@@ -38,8 +37,6 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.54.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
-	github.com/PuerkitoBio/goquery v1.6.0 // indirect
-	github.com/andybalholm/cascadia v1.1.0 // indirect
 	github.com/aquasecurity/go-version v0.0.1 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
