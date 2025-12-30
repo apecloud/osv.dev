@@ -208,7 +208,7 @@ func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected str
 	if len(cve) == 3 {
 		cveYear = cve[1]
 	}
-	if introduced != "" && introduced != "0" {
+	if introduced != "" {
 		introduced = "v" + introduced
 	}
 	if fixed != "" {
@@ -244,7 +244,7 @@ func handleEmptyIntroduced(es []event) []event {
 	empty := make([]event, 0)
 	nonEmpty := make([]event, 0)
 	for _, e := range es {
-		if e.introduced == "" {
+		if e.introduced == "" || e.introduced == "v0" {
 			empty = append(empty, e)
 		} else {
 			nonEmpty = append(nonEmpty, e)
