@@ -119,9 +119,11 @@ func (d *DefaultVersionExtractor) FindNormalAffectedRanges(affected cves.Affecte
 				Events: make([]*osvschema.Event, len(possibleVersions)),
 			}
 			for i := range possibleVersions {
-				r.Events[i].Introduced = possibleVersions[i].Introduced
-				r.Events[i].LastAffected = possibleVersions[i].LastAffected
-				r.Events[i].Fixed = possibleVersions[i].Fixed
+				r.Events[i] = &osvschema.Event{
+					Introduced:   possibleVersions[i].Introduced,
+					Fixed:        possibleVersions[i].Fixed,
+					LastAffected: possibleVersions[i].LastAffected,
+				}
 			}
 			versionRanges = append(versionRanges, r)
 			metrics.AddNote("Versions retrieved from text but not used CURRENTLY")
