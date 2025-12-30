@@ -72,6 +72,7 @@ func InitGlobalLogger() {
 		handler = newLocalHandler(os.Stdout)
 	}
 	slogLogger = slog.New(handler)
+	slogLogger.Enabled(context.Background(), slog.LevelInfo)
 }
 
 func log(level slog.Level, msg string, a []any) {
