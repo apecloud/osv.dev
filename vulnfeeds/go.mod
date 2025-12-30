@@ -15,6 +15,7 @@ require (
 	github.com/knqyf263/go-cpe v0.0.0-20230627041855-cb0794d06872
 	github.com/ossf/osv-schema/bindings/go v0.0.0-20251209024518-c18cb6974477
 	github.com/sethvargo/go-retry v0.3.0
+	golang.org/x/mod v0.29.0
 	google.golang.org/api v0.257.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/dnaeon/go-vcr.v4 v4.0.6
