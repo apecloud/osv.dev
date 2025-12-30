@@ -157,15 +157,6 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 		}
 	}
 
-	// Sort references for deterministic output
-	sort.Slice(v.References, func(i, j int) bool {
-		if v.References[i].GetUrl() != v.References[j].GetUrl() {
-			return v.References[i].GetUrl() < v.References[j].GetUrl()
-		}
-
-		return v.References[i].GetType() < v.References[j].GetType()
-	})
-
 	// Combine severity metrics from both CNA and ADP containers.
 	var severity []cves.Metrics
 	if len(cve.Containers.CNA.Metrics) != 0 {
@@ -182,12 +173,26 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 		}
 	} else {
 		// get severity from nvd
-		if s := querySeverity(string(cve.Metadata.CVEID)); len(s) > 0 {
+		cveID := string(cve.Metadata.CVEID)
+		if s := querySeverity(cveID); len(s) > 0 {
 			if sev := vulns.FindSeverity(s); sev != nil {
 				v.Severity = []*osvschema.Severity{sev}
+				v.References = append(v.References, &osvschema.Reference{
+					Type: osvschema.Reference_WEB,
+					Url:  fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", cveID),
+				})
 			}
 		}
 	}
+
+	// Sort references for deterministic output
+	sort.Slice(v.References, func(i, j int) bool {
+		if v.References[i].GetUrl() != v.References[j].GetUrl() {
+			return v.References[i].GetUrl() < v.References[j].GetUrl()
+		}
+
+		return v.References[i].GetType() < v.References[j].GetType()
+	})
 
 	return &v
 }
