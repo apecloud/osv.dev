@@ -232,7 +232,12 @@ func querySeverity(cveID string) []cves.Metrics {
 						Version:      metric.CVSSData.Version,
 						VectorString: metric.CVSSData.VectorString,
 						BaseScore:    metric.CVSSData.BaseScore,
-						BaseSeverity: *metric.CVSSData.BaseSeverity,
+						BaseSeverity: func() string {
+							if metric.CVSSData.BaseSeverity == nil {
+								return ""
+							}
+							return *metric.CVSSData.BaseSeverity
+						}(),
 					},
 				})
 			}
