@@ -158,6 +158,15 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 		}
 	}
 
+	// Sort references for deterministic output
+	sort.Slice(v.References, func(i, j int) bool {
+		if v.References[i].GetUrl() != v.References[j].GetUrl() {
+			return v.References[i].GetUrl() < v.References[j].GetUrl()
+		}
+
+		return v.References[i].GetType() < v.References[j].GetType()
+	})
+
 	// Combine severity metrics from both CNA and ADP containers.
 	var severity []cves.Metrics
 	if len(cve.Containers.CNA.Metrics) != 0 {
@@ -181,15 +190,6 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 			}
 		}
 	}
-
-	// Sort references for deterministic output
-	sort.Slice(v.References, func(i, j int) bool {
-		if v.References[i].GetUrl() != v.References[j].GetUrl() {
-			return v.References[i].GetUrl() < v.References[j].GetUrl()
-		}
-
-		return v.References[i].GetType() < v.References[j].GetType()
-	})
 
 	return &v
 }
