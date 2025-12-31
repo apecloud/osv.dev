@@ -178,10 +178,6 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 		if s := querySeverity(cveID); len(s) > 0 {
 			if sev := vulns.FindSeverity(s); sev != nil {
 				v.Severity = []*osvschema.Severity{sev}
-				v.References = append(v.References, &osvschema.Reference{
-					Type: osvschema.Reference_WEB,
-					Url:  fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", cveID),
-				})
 			}
 		}
 	}
