@@ -20,6 +20,7 @@ import (
 	"github.com/google/osv/vulnfeeds/vulns"
 	"github.com/ossf/osv-schema/bindings/go/osvconstants"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
+	"github.com/pandatix/nvdapi/common"
 	"github.com/pandatix/nvdapi/v2"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -198,7 +199,21 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 }
 
 func querySeverity(cveID string) []cves.Metrics {
-	resp, err := nvdapi.GetCVEs(&http.Client{}, nvdapi.GetCVEsParams{
+	apiKey := os.Getenv("NVD_API_KEY")
+	var (
+		c   common.HTTPClient
+		err error
+	)
+	if apiKey == "" {
+		c = &http.Client{}
+	} else {
+		c, err = nvdapi.NewNVDClient(&http.Client{}, apiKey)
+		if err != nil {
+			return nil
+		}
+	}
+
+	resp, err := nvdapi.GetCVEs(c, nvdapi.GetCVEsParams{
 		CVEID: &cveID,
 	})
 	if err != nil {
