@@ -302,7 +302,7 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 			return false
 		}
 
-		return len(vr.GetEvents()) != 2
+		return len(vr.GetEvents()) == 2
 	}
 
 	for _, vr := range *unresolvedRanges {
