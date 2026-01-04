@@ -209,6 +209,9 @@ func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected str
 		cveYear = cve[1]
 	}
 	if introduced != "" {
+		if strings.HasSuffix(introduced, ".x") {
+			introduced = strings.TrimSuffix(introduced, ".x") + ".0"
+		}
 		introduced = "v" + introduced
 	}
 	if fixed != "" {
