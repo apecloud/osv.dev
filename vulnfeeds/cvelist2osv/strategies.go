@@ -1,6 +1,8 @@
 package cvelist2osv
 
 import (
+	"regexp"
+
 	"github.com/google/osv/vulnfeeds/cves"
 	"github.com/google/osv/vulnfeeds/vulns"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
@@ -77,16 +79,29 @@ func initialNormalExtraction(vers cves.Versions, metrics *ConversionMetrics, ver
 		hasRange = false
 	}
 
+	extractSemver := func(s string) string {
+		if s == "" {
+			return ""
+		}
+
+		pattern := regexp.MustCompile(`(?i)(\d+\.\d+\.\d+)`)
+		matches := pattern.FindStringSubmatch(s)
+		if matches == nil || len(matches) < 2 {
+			return s
+		}
+		return matches[1]
+	}
+
 	if hasRange {
 		if vQuality.AtLeast(acceptableQuality) {
-			introduced = vers.Version
+			introduced = extractSemver(vers.Version)
 			metrics.AddNote("%s - Introduced from version value - %s", vQuality.String(), vers.Version)
 		}
 		if vLessThanQual.AtLeast(acceptableQuality) {
-			fixed = vers.LessThan
+			fixed = extractSemver(vers.LessThan)
 			metrics.AddNote("%s - Fixed from LessThan value - %s", vLessThanQual.String(), vers.LessThan)
 		} else if vLTOEQual.AtLeast(acceptableQuality) {
-			lastaffected = vers.LessThanOrEqual
+			lastaffected = extractSemver(vers.LessThanOrEqual)
 			metrics.AddNote("%s - LastAffected from LessThanOrEqual value- %s", vLTOEQual.String(), vers.LessThanOrEqual)
 		}
 		var versionRanges []*osvschema.Range
