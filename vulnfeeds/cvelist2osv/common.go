@@ -291,8 +291,22 @@ func handleEmptyIntroduced(es []event) []event {
 func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
 	es := make([]event, 0)
 	nowYear := strconv.Itoa(time.Now().Year())
+
+	hasFullRange := func(vr *osvschema.Range) bool {
+		if len(vr.GetEvents()) == 0 {
+			return false
+		}
+
+		ev := vr.GetEvents()[0]
+		if ev.Introduced != "" && (ev.Fixed != "" || ev.LastAffected != "") {
+			return true
+		}
+
+		return false
+	}
+
 	for _, vr := range *unresolvedRanges {
-		if len(vr.GetEvents()) == 2 {
+		if !hasFullRange(vr) {
 			var introduced, fixed, lastAffected string
 			for _, e := range vr.GetEvents() {
 				if e.GetIntroduced() != "" {
