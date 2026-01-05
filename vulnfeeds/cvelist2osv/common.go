@@ -109,6 +109,10 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 	var newVersionRanges []*osvschema.Range
 	unresolvedRanges := versionRanges
 
+	if len(unresolvedRanges) > 0 {
+		getSemverVersion(cveID, &unresolvedRanges, &newVersionRanges)
+	}
+
 	for _, repo := range repos {
 		if len(unresolvedRanges) == 0 {
 			break // All ranges have been resolved.
@@ -172,10 +176,6 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 		unresolvedRanges = stillUnresolvedRanges
 	}
 
-	if len(unresolvedRanges) > 0 {
-		getSemverVersion(cveID, &unresolvedRanges, &newVersionRanges)
-	}
-
 	var err error
 	if len(unresolvedRanges) > 0 {
 		databaseSpecific, err := utility.NewStructpbFromMap(map[string]any{"unresolved_ranges": unresolvedRanges})
@@ -209,11 +209,17 @@ func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected str
 		cveYear = cve[1]
 	}
 	if introduced != "" {
+		if introduced == "*" {
+			introduced = "0"
+		}
 		if strings.HasSuffix(introduced, ".x") {
 			introduced = strings.TrimSuffix(introduced, ".x") + ".0"
 		}
 		if strings.HasSuffix(introduced, ".") {
 			introduced = introduced + "0"
+		}
+		if strings.Contains(introduced, "-") {
+			introduced = introduced[:strings.Index(introduced, "-")]
 		}
 		introduced = "v" + introduced
 	}
