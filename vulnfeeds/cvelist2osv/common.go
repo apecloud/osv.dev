@@ -109,6 +109,10 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 	var newVersionRanges []*osvschema.Range
 	unresolvedRanges := versionRanges
 
+	if len(unresolvedRanges) > 0 {
+		getSemverVersion(cveID, &unresolvedRanges, &newVersionRanges)
+	}
+
 	for _, repo := range repos {
 		if len(unresolvedRanges) == 0 {
 			break // All ranges have been resolved.
@@ -170,10 +174,6 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 			}
 		}
 		unresolvedRanges = stillUnresolvedRanges
-	}
-
-	if len(unresolvedRanges) > 0 {
-		getSemverVersion(cveID, &unresolvedRanges, &newVersionRanges)
 	}
 
 	var err error
