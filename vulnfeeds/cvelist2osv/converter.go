@@ -112,7 +112,7 @@ func getCWEs(cna cves.CNA, metrics *ConversionMetrics) []string {
 // FromCVE5 creates a `vulns.Vulnerability` object from a `cves.CVE5` object.
 // It populates the main fields of the OSV record, including ID, summary, details,
 // references, timestamps, severity, and version information.
-func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, sourceLink string) *vulns.Vulnerability {
+func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, sourceLink string, extra map[string]string) *vulns.Vulnerability {
 	aliases, related := vulns.ExtractReferencedVulns(cve.Metadata.CVEID, cve.Metadata.CVEID, refs)
 	v := vulns.Vulnerability{
 		Vulnerability: &osvschema.Vulnerability{
@@ -147,7 +147,7 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 	metrics.Repos = repos
 
 	// Create a map to hold DatabaseSpecific fields
-	dbSpecific := buildDBSpecific(cve, metrics, sourceLink)
+	dbSpecific := buildDBSpecific(cve, metrics, sourceLink, extra)
 
 	if len(dbSpecific) > 0 {
 		databaseSpecific, err := utility.NewStructpbFromMap(dbSpecific)
@@ -312,7 +312,7 @@ func determineOutcome(metrics *ConversionMetrics) {
 
 // ConvertAndExportCVEToOSV is the main function for this file. It takes a CVE,
 // converts it into an OSV record, collects metrics, and writes both to disk.
-func ConvertAndExportCVEToOSV(cve cves.CVE5, vulnSink io.Writer, metricsSink io.Writer, sourceLink string) error {
+func ConvertAndExportCVEToOSV(cve cves.CVE5, vulnSink io.Writer, metricsSink io.Writer, sourceLink string, extra map[string]string) error {
 	cveID := cve.Metadata.CVEID
 	cnaAssigner := cve.Metadata.AssignerShortName
 	references := identifyPossibleURLs(cve)
@@ -328,7 +328,7 @@ func ConvertAndExportCVEToOSV(cve cves.CVE5, vulnSink io.Writer, metricsSink io.
 	metrics := ConversionMetrics{CVEID: cveID, CNA: cnaAssigner, UnresolvedRangesCount: 0, ResolvedRangesCount: 0}
 
 	// Create a base OSV record from the CVE.
-	v := FromCVE5(cve, references, &metrics, sourceLink)
+	v := FromCVE5(cve, references, &metrics, sourceLink, extra)
 
 	// Collect metrics about the conversion.
 	extractConversionMetrics(cve, v.References, &metrics)
@@ -406,7 +406,7 @@ func deduplicateRefs(refs []cves.Reference) []cves.Reference {
 	return refs
 }
 
-func buildDBSpecific(cve cves.CVE5, metrics *ConversionMetrics, sourceLink string) map[string]any {
+func buildDBSpecific(cve cves.CVE5, metrics *ConversionMetrics, sourceLink string, extra map[string]string) map[string]any {
 	dbSpecific := make(map[string]any)
 
 	if sourceLink != "" {
@@ -421,6 +421,10 @@ func buildDBSpecific(cve cves.CVE5, metrics *ConversionMetrics, sourceLink strin
 
 	if slices.Contains(cve.Containers.CNA.Tags, "disputed") {
 		dbSpecific["isDisputed"] = true
+	}
+
+	for k, v := range extra {
+		dbSpecific[k] = v
 	}
 
 	cwes := getCWEs(cve.Containers.CNA, metrics)
