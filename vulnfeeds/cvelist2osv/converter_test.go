@@ -341,7 +341,7 @@ func TestFromCVE5(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			metrics := &ConversionMetrics{}
-			vuln := FromCVE5(tc.cve, tc.refs, metrics, "")
+			vuln := FromCVE5(tc.cve, tc.refs, metrics, "", nil)
 
 			// Handle non-deterministic time.Now()
 			if strings.Contains(tc.name, "invalid date") {
@@ -583,7 +583,7 @@ func TestConvertAndExportCVEToOSV(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			vWriter := bytes.NewBuffer(nil)
 			mWriter := bytes.NewBuffer(nil)
-			err := ConvertAndExportCVEToOSV(tc.cve, vWriter, mWriter, "")
+			err := ConvertAndExportCVEToOSV(tc.cve, vWriter, mWriter, "", nil)
 			if err != nil {
 				t.Errorf("Unexpected error from ConvertAndExportCVEToOSV: %v", err)
 			}
