@@ -86,9 +86,10 @@ func initialNormalExtraction(vers cves.Versions, metrics *ConversionMetrics, ver
 
 		pattern := regexp.MustCompile(`(?i)(\d+\.\d+\.[\dx]+)`)
 		matches := pattern.FindStringSubmatch(s)
-		if matches == nil || len(matches) < 2 {
+		if len(matches) < 2 {
 			return s
 		}
+
 		return matches[1]
 	}
 

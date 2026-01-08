@@ -21,8 +21,8 @@ var (
 	levelStyle   = lipgloss.NewStyle().Width(8).Bold(true)
 	messageStyle = lipgloss.NewStyle()
 	keyStyle     = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("6")). // Cyan
-			Bold(true)
+		Foreground(lipgloss.Color("6")). // Cyan
+		Bold(true)
 	valueStyle = lipgloss.NewStyle()
 	logLever   = os.Getenv("OSV_LOG_LEVEL")
 )
@@ -49,6 +49,7 @@ func (h *localHandler) Enabled(_ context.Context, level slog.Level) bool {
 	case "error":
 		l = slog.LevelError
 	}
+
 	return level >= l
 }
 
