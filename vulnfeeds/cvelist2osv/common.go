@@ -219,7 +219,10 @@ func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected str
 			introduced += "0"
 		}
 		if strings.Contains(introduced, "-") {
-			introduced = introduced[:strings.Index(introduced, "-")+1]
+			index := strings.Index(introduced, "-")
+			if index != -1 {
+				introduced = introduced[:strings.Index(introduced, "-")]
+			}
 		}
 		introduced = "v" + introduced
 	}
