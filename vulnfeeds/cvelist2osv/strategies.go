@@ -1,6 +1,8 @@
 package cvelist2osv
 
 import (
+	"regexp"
+
 	"github.com/google/osv/vulnfeeds/cves"
 	"github.com/google/osv/vulnfeeds/vulns"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
@@ -22,6 +24,8 @@ func cpeVersionExtraction(cve cves.CVE5, metrics *ConversionMetrics) ([]*osvsche
 
 // textVersionExtraction is a helper function for CPE and description extraction.
 func textVersionExtraction(cve cves.CVE5, metrics *ConversionMetrics) []*osvschema.Range {
+	var res []*osvschema.Range
+
 	// As a last resort, try extracting versions from the description text.
 	versions, extractNotes := cves.ExtractVersionsFromText(nil, cves.EnglishDescription(cve.Containers.CNA.Descriptions))
 	for _, note := range extractNotes {
@@ -31,9 +35,21 @@ func textVersionExtraction(cve cves.CVE5, metrics *ConversionMetrics) []*osvsche
 		// NOTE: These versions are not currently saved due to the need for better validation.
 		metrics.VersionSources = append(metrics.VersionSources, VersionSourceDescription)
 		metrics.AddNote("Extracted versions from description but did not save them: %+v", versions)
+
+		r := &osvschema.Range{
+			Events: make([]*osvschema.Event, len(versions)),
+		}
+		for i := range versions {
+			r.Events[i] = &osvschema.Event{
+				Introduced:   versions[i].Introduced,
+				Fixed:        versions[i].Fixed,
+				LastAffected: versions[i].LastAffected,
+			}
+		}
+		res = append(res, r)
 	}
 
-	return []*osvschema.Range{}
+	return res
 }
 
 // initialNormalExtraction handles an expected case of version ranges in the affected field of CVE5
@@ -63,16 +79,29 @@ func initialNormalExtraction(vers cves.Versions, metrics *ConversionMetrics, ver
 		hasRange = false
 	}
 
+	extractSemver := func(s string) string {
+		if s == "" {
+			return ""
+		}
+
+		pattern := regexp.MustCompile(`(?i)(\d+\.\d+\.[\dx]+)`)
+		matches := pattern.FindStringSubmatch(s)
+		if matches == nil || len(matches) < 2 {
+			return s
+		}
+		return matches[1]
+	}
+
 	if hasRange {
 		if vQuality.AtLeast(acceptableQuality) {
-			introduced = vers.Version
+			introduced = extractSemver(vers.Version)
 			metrics.AddNote("%s - Introduced from version value - %s", vQuality.String(), vers.Version)
 		}
 		if vLessThanQual.AtLeast(acceptableQuality) {
-			fixed = vers.LessThan
+			fixed = extractSemver(vers.LessThan)
 			metrics.AddNote("%s - Fixed from LessThan value - %s", vLessThanQual.String(), vers.LessThan)
 		} else if vLTOEQual.AtLeast(acceptableQuality) {
-			lastaffected = vers.LessThanOrEqual
+			lastaffected = extractSemver(vers.LessThanOrEqual)
 			metrics.AddNote("%s - LastAffected from LessThanOrEqual value- %s", vLTOEQual.String(), vers.LessThanOrEqual)
 		}
 		var versionRanges []*osvschema.Range

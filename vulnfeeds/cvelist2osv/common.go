@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/osv/vulnfeeds/cves"
 	"github.com/google/osv/vulnfeeds/git"
@@ -14,6 +16,7 @@ import (
 	"github.com/google/osv/vulnfeeds/utility/logger"
 	"github.com/google/osv/vulnfeeds/vulns"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
+	"golang.org/x/mod/semver"
 )
 
 // VersionRangeType represents the type of versioning scheme for a range.
@@ -106,6 +109,10 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 	var newVersionRanges []*osvschema.Range
 	unresolvedRanges := versionRanges
 
+	if len(unresolvedRanges) > 0 {
+		getSemverVersion(cveID, &unresolvedRanges, &newVersionRanges)
+	}
+
 	for _, repo := range repos {
 		if len(unresolvedRanges) == 0 {
 			break // All ranges have been resolved.
@@ -189,6 +196,205 @@ func gitVersionsToCommits(cveID cves.CVEID, versionRanges []*osvschema.Range, re
 	}
 
 	return &newAff, err
+}
+
+type event struct {
+	introduced, fixed, lastAffected string
+}
+
+func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected string) event {
+	cve := strings.Split(string(cveID), "-")
+	var cveYear string
+	if len(cve) == 3 {
+		cveYear = cve[1]
+	}
+	if introduced != "" {
+		if introduced == "*" {
+			introduced = "0"
+		}
+		if strings.HasSuffix(introduced, ".x") {
+			introduced = strings.TrimSuffix(introduced, ".x") + ".0"
+		}
+		if strings.HasSuffix(introduced, ".") {
+			introduced = introduced + "0"
+		}
+		if strings.Contains(introduced, "-") {
+			introduced = introduced[:strings.Index(introduced, "-")]
+		}
+		introduced = "v" + introduced
+	}
+	if fixed != "" {
+		fixed = "v" + fixed
+	}
+	if lastAffected != "" {
+		// use fixed instead of last_affected where possible
+		if cveYear == year {
+			lastAffected = "v" + lastAffected
+		} else {
+			version := semver.Canonical("v" + lastAffected)
+			if version != "" {
+				versions := strings.Split(version, ".")
+				if len(versions) == 3 {
+					v, err := strconv.Atoi(versions[2])
+					if err == nil {
+						versions[2] = strconv.Itoa(v + 1)
+						fixed = strings.Join(versions, ".")
+						lastAffected = ""
+					}
+				}
+			}
+		}
+	}
+	return event{
+		introduced:   introduced,
+		fixed:        fixed,
+		lastAffected: lastAffected,
+	}
+}
+
+func handleEmptyIntroduced(es []event) []event {
+	empty := make([]event, 0)
+	nonEmpty := make([]event, 0)
+	for _, e := range es {
+		if e.introduced == "" || e.introduced == "v0" {
+			empty = append(empty, e)
+		} else {
+			nonEmpty = append(nonEmpty, e)
+		}
+	}
+
+	if len(empty) == 1 {
+		empty[0].introduced = "v0"
+	} else {
+		major := map[string]int{}
+		majorMinor := map[string]int{}
+		for _, e := range empty {
+			versionSource := e.fixed
+			if versionSource == "" {
+				versionSource = e.lastAffected
+			}
+
+			major[semver.Major(versionSource)]++
+			majorMinor[semver.MajorMinor(versionSource)]++
+		}
+
+		for i, e := range empty {
+			versionSource := e.fixed
+			if versionSource == "" {
+				versionSource = e.lastAffected
+			}
+
+			if v, ok := major[semver.Major(versionSource)]; ok {
+				if v > 1 {
+					empty[i].introduced = semver.MajorMinor(versionSource)
+				} else {
+					empty[i].introduced = semver.Major(versionSource)
+				}
+			}
+		}
+	}
+
+	return append(empty, nonEmpty...)
+}
+
+func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*osvschema.Range) {
+	es := make([]event, 0)
+	nowYear := strconv.Itoa(time.Now().Year())
+
+	mergeVer := func(vr *osvschema.Range) bool {
+		if len(vr.GetEvents()) == 0 {
+			return false
+		}
+
+		ev := vr.GetEvents()[0]
+		if ev.Introduced != "" && (ev.Fixed != "" || ev.LastAffected != "") {
+			return false
+		}
+
+		return len(vr.GetEvents()) == 2
+	}
+
+	for _, vr := range *unresolvedRanges {
+		if mergeVer(vr) {
+			var introduced, fixed, lastAffected string
+			for _, e := range vr.GetEvents() {
+				if e.GetIntroduced() != "" {
+					introduced = e.GetIntroduced()
+				}
+				if e.GetFixed() != "" {
+					fixed = e.GetFixed()
+				}
+				if e.GetLastAffected() != "" {
+					lastAffected = e.GetLastAffected()
+				}
+			}
+
+			if fixed != "" || lastAffected != "" {
+				es = append(es, newEvent(cveID, nowYear, introduced, fixed, lastAffected))
+			}
+		} else {
+			for _, e := range vr.GetEvents() {
+				if e.Fixed == "" && e.LastAffected == "" {
+					continue
+				}
+
+				es = append(es, newEvent(cveID, nowYear, e.GetIntroduced(), e.GetFixed(), e.GetLastAffected()))
+			}
+		}
+	}
+
+	if len(es) > 0 {
+		es = handleEmptyIntroduced(es)
+		sort.Slice(es, func(i, j int) bool {
+			if c := semver.Compare(es[i].introduced, es[j].introduced); c != 0 {
+				return c < 0
+			}
+			if c := semver.Compare(es[i].fixed, es[j].fixed); c != 0 {
+				return c < 0
+			}
+			return semver.Compare(es[i].lastAffected, es[j].lastAffected) < 0
+		})
+
+		newVR := osvschema.Range{
+			Events: make([]*osvschema.Event, 0),
+			Type:   osvschema.Range_SEMVER,
+		}
+		for _, e := range es {
+			if l := len(newVR.Events); l > 0 {
+				introduced := strings.TrimPrefix(semver.Canonical(e.introduced), "v")
+				if newVR.Events[l-1].Fixed == introduced && semver.Canonical(e.fixed) != "" {
+					newVR.Events[l-1].Fixed = strings.TrimPrefix(semver.Canonical(e.fixed), "v")
+					continue
+				}
+			}
+
+			if e.fixed != "" {
+				v := semver.Canonical(e.fixed)
+				if v != "" {
+					newVR.Events = append(newVR.Events, &osvschema.Event{
+						Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
+					})
+					newVR.Events = append(newVR.Events, &osvschema.Event{
+						Fixed: strings.TrimPrefix(v, "v"),
+					})
+				}
+			} else {
+				v := semver.Canonical(e.lastAffected)
+				if v != "" {
+					newVR.Events = append(newVR.Events, &osvschema.Event{
+						Introduced: strings.TrimPrefix(semver.Canonical(e.introduced), "v"),
+					})
+					newVR.Events = append(newVR.Events, &osvschema.Event{
+						LastAffected: strings.TrimPrefix(v, "v"),
+					})
+				}
+			}
+		}
+		if len(newVR.Events) > 0 {
+			*newVersionRanges = append(*newVersionRanges, &newVR)
+			*unresolvedRanges = nil
+		}
+	}
 }
 
 // findCPEVersionRanges extracts version ranges and CPE strings from the CNA's

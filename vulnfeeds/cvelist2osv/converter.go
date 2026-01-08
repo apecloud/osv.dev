@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +20,8 @@ import (
 	"github.com/google/osv/vulnfeeds/vulns"
 	"github.com/ossf/osv-schema/bindings/go/osvconstants"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
+	"github.com/pandatix/nvdapi/common"
+	"github.com/pandatix/nvdapi/v2"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -109,7 +112,7 @@ func getCWEs(cna cves.CNA, metrics *ConversionMetrics) []string {
 // FromCVE5 creates a `vulns.Vulnerability` object from a `cves.CVE5` object.
 // It populates the main fields of the OSV record, including ID, summary, details,
 // references, timestamps, severity, and version information.
-func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, sourceLink string) *vulns.Vulnerability {
+func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, sourceLink string, extra map[string]string) *vulns.Vulnerability {
 	aliases, related := vulns.ExtractReferencedVulns(cve.Metadata.CVEID, cve.Metadata.CVEID, refs)
 	v := vulns.Vulnerability{
 		Vulnerability: &osvschema.Vulnerability{
@@ -144,7 +147,7 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 	metrics.Repos = repos
 
 	// Create a map to hold DatabaseSpecific fields
-	dbSpecific := buildDBSpecific(cve, metrics, sourceLink)
+	dbSpecific := buildDBSpecific(cve, metrics, sourceLink, extra)
 
 	if len(dbSpecific) > 0 {
 		databaseSpecific, err := utility.NewStructpbFromMap(dbSpecific)
@@ -178,9 +181,89 @@ func FromCVE5(cve cves.CVE5, refs []cves.Reference, metrics *ConversionMetrics, 
 		if sev := vulns.FindSeverity(severity); sev != nil {
 			v.Severity = []*osvschema.Severity{sev}
 		}
+	} else {
+		// get severity from nvd
+		cveID := string(cve.Metadata.CVEID)
+		if s := querySeverity(cveID); len(s) > 0 {
+			if sev := vulns.FindSeverity(s); sev != nil {
+				v.Severity = []*osvschema.Severity{sev}
+			}
+		}
 	}
 
 	return &v
+}
+
+func querySeverity(cveID string) []cves.Metrics {
+	apiKey := os.Getenv("NVD_API_KEY")
+	var (
+		c   common.HTTPClient
+		err error
+	)
+	if apiKey == "" {
+		c = &http.Client{}
+	} else {
+		c, err = nvdapi.NewNVDClient(&http.Client{}, apiKey)
+		if err != nil {
+			return nil
+		}
+	}
+
+	resp, err := nvdapi.GetCVEs(c, nvdapi.GetCVEsParams{
+		CVEID: &cveID,
+	})
+	if err != nil {
+		return nil
+	}
+
+	res := make([]cves.Metrics, 0)
+	if len(resp.Vulnerabilities) > 0 {
+		cve := resp.Vulnerabilities[0].CVE
+		if cve.Metrics != nil {
+			for _, metric := range cve.Metrics.CVSSMetricV31 {
+				res = append(res, cves.Metrics{
+					CVSSv3_1: cves.BaseCVSS{
+						Version:      metric.CVSSData.Version,
+						VectorString: metric.CVSSData.VectorString,
+						BaseScore:    metric.CVSSData.BaseScore,
+						BaseSeverity: metric.CVSSData.BaseSeverity,
+					},
+				})
+			}
+
+			for _, metric := range cve.Metrics.CVSSMetricV30 {
+				res = append(res, cves.Metrics{
+					CVSSv3_0: cves.BaseCVSS{
+						Version:      metric.CVSSData.Version,
+						VectorString: metric.CVSSData.VectorString,
+						BaseScore:    metric.CVSSData.BaseScore,
+						BaseSeverity: metric.CVSSData.BaseSeverity,
+					},
+				})
+			}
+
+			for _, metric := range cve.Metrics.CVSSMetricV2 {
+				res = append(res, cves.Metrics{
+					CVSSv2_0: cves.BaseCVSS{
+						Version:      metric.CVSSData.Version,
+						VectorString: metric.CVSSData.VectorString,
+						BaseScore:    metric.CVSSData.BaseScore,
+						BaseSeverity: func() string {
+							if metric.CVSSData.BaseSeverity == nil {
+								return ""
+							}
+							return *metric.CVSSData.BaseSeverity
+						}(),
+					},
+				})
+			}
+		}
+	}
+
+	if len(res) > 0 {
+		return res
+	}
+	return nil
 }
 
 // CreateOSVFile creates the initial file for the OSV record.
@@ -229,7 +312,7 @@ func determineOutcome(metrics *ConversionMetrics) {
 
 // ConvertAndExportCVEToOSV is the main function for this file. It takes a CVE,
 // converts it into an OSV record, collects metrics, and writes both to disk.
-func ConvertAndExportCVEToOSV(cve cves.CVE5, vulnSink io.Writer, metricsSink io.Writer, sourceLink string) error {
+func ConvertAndExportCVEToOSV(cve cves.CVE5, vulnSink io.Writer, metricsSink io.Writer, sourceLink string, extra map[string]string) error {
 	cveID := cve.Metadata.CVEID
 	cnaAssigner := cve.Metadata.AssignerShortName
 	references := identifyPossibleURLs(cve)
@@ -245,7 +328,7 @@ func ConvertAndExportCVEToOSV(cve cves.CVE5, vulnSink io.Writer, metricsSink io.
 	metrics := ConversionMetrics{CVEID: cveID, CNA: cnaAssigner, UnresolvedRangesCount: 0, ResolvedRangesCount: 0}
 
 	// Create a base OSV record from the CVE.
-	v := FromCVE5(cve, references, &metrics, sourceLink)
+	v := FromCVE5(cve, references, &metrics, sourceLink, extra)
 
 	// Collect metrics about the conversion.
 	extractConversionMetrics(cve, v.References, &metrics)
@@ -323,7 +406,7 @@ func deduplicateRefs(refs []cves.Reference) []cves.Reference {
 	return refs
 }
 
-func buildDBSpecific(cve cves.CVE5, metrics *ConversionMetrics, sourceLink string) map[string]any {
+func buildDBSpecific(cve cves.CVE5, metrics *ConversionMetrics, sourceLink string, extra map[string]string) map[string]any {
 	dbSpecific := make(map[string]any)
 
 	if sourceLink != "" {
@@ -338,6 +421,10 @@ func buildDBSpecific(cve cves.CVE5, metrics *ConversionMetrics, sourceLink strin
 
 	if slices.Contains(cve.Containers.CNA.Tags, "disputed") {
 		dbSpecific["isDisputed"] = true
+	}
+
+	for k, v := range extra {
+		dbSpecific[k] = v
 	}
 
 	cwes := getCWEs(cve.Containers.CNA, metrics)

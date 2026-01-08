@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -23,6 +24,7 @@ var (
 			Foreground(lipgloss.Color("6")). // Cyan
 			Bold(true)
 	valueStyle = lipgloss.NewStyle()
+	logLever   = os.Getenv("OSV_LOG_LEVEL")
 )
 
 type localHandler struct {
@@ -35,11 +37,25 @@ func newLocalHandler(w io.Writer) *localHandler {
 	}
 }
 
-func (h *localHandler) Enabled(_ context.Context, _ slog.Level) bool {
-	return true
+func (h *localHandler) Enabled(_ context.Context, level slog.Level) bool {
+	l := slog.LevelDebug
+	switch logLever {
+	case "debug":
+		l = slog.LevelDebug
+	case "info":
+		l = slog.LevelInfo
+	case "warn":
+		l = slog.LevelWarn
+	case "error":
+		l = slog.LevelError
+	}
+	return level >= l
 }
 
-func (h *localHandler) Handle(_ context.Context, r slog.Record) error {
+func (h *localHandler) Handle(ctx context.Context, r slog.Record) error {
+	if !h.Enabled(ctx, r.Level) {
+		return nil
+	}
 	// INFO:  message foo=bar
 	sb := &strings.Builder{}
 	fmt.Fprint(sb, levelStyle.Foreground(levelColors[r.Level]).Render(r.Level.String()+":"))
