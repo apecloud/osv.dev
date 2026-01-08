@@ -127,7 +127,6 @@ func (d *DefaultVersionExtractor) FindNormalAffectedRanges(affected cves.Affecte
 			}
 			versionRanges = append(versionRanges, r)
 			metrics.AddNote("Versions retrieved from text but not used CURRENTLY")
-
 			continue
 		}
 

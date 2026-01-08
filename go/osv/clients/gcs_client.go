@@ -71,11 +71,7 @@ func (c *GCSClient) ReadObjectAttrs(ctx context.Context, path string) (*Attrs, e
 		return nil, err
 	}
 
-	return &Attrs{
-		Generation: attrs.Generation,
-		CustomTime: attrs.CustomTime,
-		CRC32C:     attrs.CRC32C,
-	}, nil
+	return &Attrs{Generation: attrs.Generation, CustomTime: attrs.CustomTime}, nil
 }
 
 func (c *GCSClient) WriteObject(ctx context.Context, path string, data []byte, opts *WriteOptions) error {

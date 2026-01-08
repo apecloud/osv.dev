@@ -216,10 +216,10 @@ func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected str
 			introduced = strings.TrimSuffix(introduced, ".x") + ".0"
 		}
 		if strings.HasSuffix(introduced, ".") {
-			introduced += "0"
+			introduced = introduced + "0"
 		}
 		if strings.Contains(introduced, "-") {
-			introduced = introduced[:strings.Index(introduced, "-")+1]
+			introduced = introduced[:strings.Index(introduced, "-")]
 		}
 		introduced = "v" + introduced
 	}
@@ -245,7 +245,6 @@ func newEvent(cveID cves.CVEID, year string, introduced, fixed, lastAffected str
 			}
 		}
 	}
-
 	return event{
 		introduced:   introduced,
 		fixed:        fixed,
@@ -308,7 +307,7 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 		}
 
 		ev := vr.GetEvents()[0]
-		if ev.GetIntroduced() != "" && (ev.GetFixed() != "" || ev.GetLastAffected() != "") {
+		if ev.Introduced != "" && (ev.Fixed != "" || ev.LastAffected != "") {
 			return false
 		}
 
@@ -335,7 +334,7 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 			}
 		} else {
 			for _, e := range vr.GetEvents() {
-				if e.GetFixed() == "" && e.GetLastAffected() == "" {
+				if e.Fixed == "" && e.LastAffected == "" {
 					continue
 				}
 
@@ -353,7 +352,6 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 			if c := semver.Compare(es[i].fixed, es[j].fixed); c != 0 {
 				return c < 0
 			}
-
 			return semver.Compare(es[i].lastAffected, es[j].lastAffected) < 0
 		})
 
@@ -362,10 +360,10 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 			Type:   osvschema.Range_SEMVER,
 		}
 		for _, e := range es {
-			if l := len(newVR.GetEvents()); l > 0 {
+			if l := len(newVR.Events); l > 0 {
 				introduced := strings.TrimPrefix(semver.Canonical(e.introduced), "v")
-				if newVR.GetEvents()[l-1].GetFixed() == introduced && semver.Canonical(e.fixed) != "" {
-					newVR.GetEvents()[l-1].Fixed = strings.TrimPrefix(semver.Canonical(e.fixed), "v")
+				if newVR.Events[l-1].Fixed == introduced && semver.Canonical(e.fixed) != "" {
+					newVR.Events[l-1].Fixed = strings.TrimPrefix(semver.Canonical(e.fixed), "v")
 					continue
 				}
 			}
@@ -392,7 +390,7 @@ func getSemverVersion(cveID cves.CVEID, unresolvedRanges, newVersionRanges *[]*o
 				}
 			}
 		}
-		if len(newVR.GetEvents()) > 0 {
+		if len(newVR.Events) > 0 {
 			*newVersionRanges = append(*newVersionRanges, &newVR)
 			*unresolvedRanges = nil
 		}

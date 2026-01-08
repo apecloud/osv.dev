@@ -16,5 +16,3 @@ hurl-scripts/
 temp/*
 **/tmp/**
 gcp/api/v1/osv/**
-
-.DS_STORE

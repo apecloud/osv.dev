@@ -252,7 +252,6 @@ func querySeverity(cveID string) []cves.Metrics {
 							if metric.CVSSData.BaseSeverity == nil {
 								return ""
 							}
-
 							return *metric.CVSSData.BaseSeverity
 						}(),
 					},
@@ -264,7 +263,6 @@ func querySeverity(cveID string) []cves.Metrics {
 	if len(res) > 0 {
 		return res
 	}
-
 	return nil
 }
 
