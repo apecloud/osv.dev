@@ -49,6 +49,7 @@ func (h *localHandler) Enabled(_ context.Context, level slog.Level) bool {
 	case "error":
 		l = slog.LevelError
 	}
+
 	return level >= l
 }
 
